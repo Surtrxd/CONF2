@@ -10,16 +10,29 @@ def read_config(config_path):
 
 def get_commits_with_file(repo_path, file_hash):
     """
-    Получение коммитов, связанных с файлом по его хешу.
-    Возвращает список [(хеш, сообщение)].
+    Получение коммитов, связанных с файлом по его хешу,
+    без использования сторонних библиотек (напрямую из .git/logs/HEAD).
     """
-    os.chdir(repo_path)  # Переходим в директорию репозитория
-    result = subprocess.run(
-        ["git", "log", "--all", "--pretty=format:%H|%s", "--", file_hash],
-        capture_output=True, text=True
-    )
-    commits = result.stdout.strip().split("\n")
-    return [line.split("|") for line in commits]
+    commits = []
+    logs_path = os.path.join(repo_path, ".git", "logs", "HEAD")
+    
+    try:
+        with open(logs_path, "r") as log_file:
+            for line in log_file:
+                # Каждая строка формата:
+                # old_hash new_hash user details message
+                parts = line.strip().split(" ", maxsplit=4)
+                if len(parts) == 5:
+                    commit_hash, message = parts[1], parts[4]
+                    # Проверка на наличие идентификатора файла (file_hash) в сообщении
+                    if file_hash in message:
+                        commits.append((commit_hash, message))
+    except FileNotFoundError:
+        print("Файл логов не найден. Убедитесь, что это git-репозиторий.")
+    except Exception as e:
+        print(f"Ошибка при чтении логов: {e}")
+    
+    return commits
 
 def generate_plantuml_graph(commits):
     """
